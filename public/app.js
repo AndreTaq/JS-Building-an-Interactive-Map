@@ -1,46 +1,92 @@
 // Create map
-const myMap = L.map("map", {
-  center: [48.87007, 2.346453],
-  zoom: 12,
-});
+const myMap = {
+  coordinates: [],
+  businesses: [],
+  map: {},
+  markers: {},
 
-// Add openstreetmap tiles
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-}).addTo(myMap);
+  buildMap() {
+    this.map = L.map("map", {
+      center: this.coordinates,
+      zoom: 12,
+    });
 
-// Function to add markers and polygons to the map
-function addCoordinates(coordinates) {
-  // Clear existing markers and polygons
-  myMap.eachLayer(function (layer) {
-    if (layer instanceof L.Marker || layer instanceof L.Polygon) {
-      myMap.removeLayer(layer);
-    }
-  });
+    // Add tile layer
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      minZoom: "12",
+    }).addTo(this.map);
+    // Add marker
+    const marker = L.marker(this.coordinates);
+    marker
+      .addTo(this.map)
+      .bindPopup("<p1><b>You are here!</b></p1>")
+      .openPopup();
+  },
+  // add business markers
+	addMarkers() {
+		for (let i = 0; i < this.businesses.length; i++) {
+		this.markers = L.marker([
+			this.businesses[i].lat,
+			this.businesses[i].long,
+		])
+			.bindPopup(`<p1>${this.businesses[i].name}</p1>`)
+			.addTo(this.map)
+		}
+	},
+};
 
-  // Add marker
-  const marker = L.marker(coordinates[0]);
-  marker
-    .addTo(myMap)
-    .bindPopup("<p1><b>The Hoxton, Paris</b></p1>")
-    .openPopup();
+// Get coordinates
+async function getCoords(){
+	const pos = await new Promise((resolve, reject) => {
+		navigator.geolocation.getCurrentPosition(resolve, reject)
+	});
+	return [pos.coords.latitude, pos.coords.longitude]
+}
+async function fetchData(business) {
+  // Fetch data
+  const options = {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      Authorization: "fsq3y/vFLPZmL0OjyIbDhN65KhKkhjkx1HwCZynbhLi2YRI=",
+    },
+  };
 
-  // Draw the polygon
-  L.polygon(coordinates).addTo(myMap);
-
-  // Adjust zoom level based on the content
-  myMap.fitBounds(coordinates);
+  let response = await fetch(
+    "https://api.foursquare.com/v3/places/search?query=coffee&ll=32.84%2C-116.87&radius=1000&limit=5",
+    options
+  )
+  .then(response => response.json())
+  .then(response => console.log(response))
+  .catch(err => console.error(err));
 }
 
+// process foursquare array
+function processBusinesses(data) {
+	let businesses = data.map((element) => {
+		let location = {
+			name: element.name,
+			lat: element.geocodes.main.latitude,
+			long: element.geocodes.main.longitude
+		};
+		return location
+	})
+	return businesses
+}
+// window load
+window.onload = async () => {
+	const coords = await getCoords()
+	myMap.coordinates = coords
+	myMap.buildMap()
+}
 
-// Example usage
-const exampleCoordinates = [
-  [48.863368120198004, 2.3509079846928516],
-  [48.86933262048345, 2.3542531602919805],
-  [48.87199261164275, 2.3400569901592183],
-  [48.86993336274516, 2.3280142476578813],
-  [48.86834104280146, 2.330308418109664],
-];
-
-addCoordinates(exampleCoordinates);
+// business submit button
+document.getElementById('submit').addEventListener('click', async (event) => {
+	event.preventDefault()
+	let business = document.getElementById('business').value
+	let data = await getFoursquare(business)
+	myMap.businesses = processBusinesses(data)
+	myMap.addMarkers()
+})
